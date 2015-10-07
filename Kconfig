@@ -1,0 +1,5 @@
+config NRF24L01P
+       tristate "Build Nordic's nRF24L01+ driver"
+       depends on m
+       help
+         This builds the Nordic's nRF24L01+ SPI driver.
