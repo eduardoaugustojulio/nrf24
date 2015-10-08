@@ -4,7 +4,7 @@ CFLAGS_rf_module.o += -DDEBUG
 nrf24-y := rf_module.o rf_helpers.o rf_sysfs.o
 obj-m += nrf24.o
 
-ifneq ($(M),,)
+ifdef M
 	ccflags-y += -I"$(M)/include/"
 endif
 
