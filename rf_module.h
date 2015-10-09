@@ -84,12 +84,6 @@ struct rf_data {
         struct completion tx_complete;
         wait_queue_head_t rx_wq;
         int new_rx_data;
-        /* spi_async stuff */
-        spinlock_t          async_lck;
-        struct spi_message  async_msg;
-        struct spi_transfer async_tsf[2];
-        u8 async_cmd;
-        u8 async_arg[32];
         /* statistics */
         unsigned long txcount;
         unsigned long rxcount;

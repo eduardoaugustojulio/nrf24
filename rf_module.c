@@ -47,47 +47,30 @@ static struct attribute_group rf_attr_group = {
 /*
  * IRQ Stuff
  */
-static void read_rx_complete(void *data)
+static irqreturn_t rf_hard_irq(int irq, void *handle)
 {
+	return IRQ_WAKE_THREAD;
+}
+
+static irqreturn_t rf_irq(int irq, void *data)
+{
+        u8 status;
         struct rf_data *rf = data;
 
-        if (rf->async_msg.status == 0) {
-                trace_puts("RX IRQ served\n");
+        read_reg(rf->spi, STATUS_REG, &status, 1);
+
+        if (IS_SETTED(status, BIT(5))) {
+                _DEBUG("TX IRQ served");
+                complete(&rf->tx_complete);
+                rf->txcount++;
+        }
+
+        if (IS_SETTED(status, BIT(6))) {
+                _DEBUG("RX IRQ served");
                 rf->rxcount++;
                 rf->new_rx_data = 1;
                 wake_up(&rf->rx_wq);
-        } else
-                trace_puts("SPI transfer error\n");
-}
-
-static void read_status_complete(void *data)
-{
-        struct rf_data *rf = data;
-
-        if (rf->async_msg.status == 0) {
-                u8 status = rf->async_arg[0];
-
-                if (IS_SETTED(BIT(5), status) || IS_SETTED(BIT(4), status)) {
-                        trace_puts("TX IRQ served\n");
-                        complete(&rf->tx_complete);
-                        rf->txcount++;
-                }
-
-                if (IS_SETTED(BIT(6), status))
-                        read_rx_nosleep(rf->spi, read_rx_complete, rf);
-        } else
-                trace_puts("SPI transfer error\n");
-}
-
-static irqreturn_t rf_hard_irq(int irq, void *handle)
-{
-        struct rf_data *rf = handle;
-        read_reg_nosleep(rf->spi, STATUS_REG, 1, read_status_complete, rf);
-	return IRQ_HANDLED;
-}
-
-static irqreturn_t rf_irq(int irq, void *_rf)
-{
+        }
         return IRQ_HANDLED;
 }
 
@@ -383,13 +366,13 @@ static long rf_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
                         _DEBUG("User timeout %u", krn.timeout);
                         tout = krn.timeout * HZ / 1000;
 
-                        n = copy_from_user(tx_pld, krn.tx, sizeof(tx_pld));
+                        n = copy_from_user(tx_pld, krn.tx, min(sizeof(tx_pld), krn.tx_siz));
                         if (n) {
                                 status = -EIO;
                                 break;
                         }
 
-                        status = TX(rf, tx_pld, tout);
+                        status = TX(rf, tx_pld, krn.tx_siz, tout);
                         if (status <= 0) {
                                 _DEBUG("TX timedout");
                                 status = -ETIMEDOUT;
@@ -397,7 +380,7 @@ static long rf_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
                         };
                         _DEBUG("TTR transmited");
 
-                        status = RX(rf, rx_pld, tout);
+                        status = RX(rf, rx_pld, krn.rx_siz, tout);
                         if (status <= 0) {
                                 _DEBUG("RX timedout");
                                 status = -ETIMEDOUT;
@@ -410,6 +393,8 @@ static long rf_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
                                 status = -EIO;
                                 break;
                         }
+
+                        put_user(krn.rx_siz, &usr->rx_siz);
 
                         status = 0;
                         _DEBUG("Returning 0");
@@ -433,7 +418,7 @@ static long rf_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
                                 break;
                         }
 
-                        status = RX(rf, rx_pld, tout);
+                        status = RX(rf, rx_pld, krn.rx_siz, tout);
                         if (status <= 0) {
                                 _DEBUG("RX timedout");
                                 status = -ETIMEDOUT;
@@ -447,7 +432,7 @@ static long rf_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
                                 break;
                         }
 
-                        status = TX(rf, tx_pld, tout);
+                        status = TX(rf, tx_pld, krn.tx_siz, tout);
                         if (status <= 0) {
                                 _DEBUG("TX timedout");
                                 status = -ETIMEDOUT;
@@ -540,9 +525,6 @@ static int rf_probe(struct spi_device *spi)
         init_completion(&rf->tx_complete);
         init_waitqueue_head(&rf->rx_wq);
         scnprintf(rf->devname, DEVNAME_MAX, "nrf24-%d.%d", spi->master->bus_num, spi->chip_select);
-
-        /* spi_async stuff */
-        spin_lock_init(&rf->async_lck);
 
         gpio_irq = of_get_named_gpio(np, "gpio-irq", 0);
         spi->irq = gpio_to_irq(gpio_irq);

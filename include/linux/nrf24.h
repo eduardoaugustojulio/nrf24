@@ -8,7 +8,9 @@
 struct nrf_exch {
         unsigned int timeout;
         unsigned char *rx;
+        unsigned int   rx_siz;
         unsigned char *tx;
+        unsigned int   tx_siz;
 };
 
 #define NRF24_MAGIC 'r'

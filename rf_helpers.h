@@ -10,13 +10,14 @@
 #endif
 
 /* power up is assumed */
-#define TX(rf, payload, timeout)                                        \
+#define TX(rf, payload, pldsiz, timeout)                                \
         ({                                                              \
                 int status;                                             \
                                                                         \
-                _DEBUG("Transmitting, timeout %lu", timeout);           \
+                _DEBUG("Transmitting, timeout %lu,  pldsiz %u",         \
+                       timeout, pldsiz);                                \
                 flush_tx((rf)->spi);                                    \
-                write_tx((rf)->spi, (payload), 32);                     \
+                write_tx((rf)->spi, (payload), (pldsiz));               \
                 write_reg((rf)->spi, STATUS_REG, "\x70", 1);            \
                 ptx_mode((rf)->spi);                                    \
                 trace_puts("Waiting TX IRQ\n");                         \
@@ -31,7 +32,7 @@
         })
 
 /* power up is assumed */
-#define RX(rf, payload, timeout)                                        \
+#define RX(rf, payload, pldsiz, timeout)                                \
         ({                                                              \
                 int status;                                             \
                                                                         \
@@ -50,14 +51,21 @@
                 ce_low((rf)->spi);                                      \
                 disable_irqs((rf)->spi);                                \
                 if (status > 0) {                                       \
-                        unsigned long _flags;                           \
-                                                                        \
-                        trace_puts("Copying received frame\n");         \
-                        spin_lock_irqsave(&(rf)->async_lck, _flags);    \
-                        memcpy((payload), rf->async_arg, ARRAY_SIZE(payload)); \
-                        spin_unlock_irqrestore(&(rf)->async_lck, _flags); \
+                        u8 reg;                                         \
+                        u8 pldwid;                                      \
+                        /* check for dynamic payload*/                  \
+                        read_reg((rf)->spi, FEATURE_REG, &reg, 1);      \
+                        if (IS_SETTED(reg, BIT(2)))                     \
+                                read_rx_pld_wid((rf)->spi,              \
+                                                &pldwid);               \
+                        else                                            \
+                                read_reg((rf)->spi,                     \
+                                         RX_PW_P0_REG,                  \
+                                         &pldwid,                       \
+                                         1);                            \
+                        read_rx((rf)->spi, payload, pldwid);            \
+                        pldsiz = pldwid;                                \
                 }                                                       \
-                                                                        \
                                                                         \
                 status;                                                 \
 })
@@ -88,27 +96,9 @@ void prx_mode(struct spi_device *spi);
 void ptx_mode(struct spi_device *spi);
 int flush_rx(struct spi_device *spi);
 int flush_tx(struct spi_device *spi);
-int is_rx_empty(struct spi_device *spi);
 int read_rx(struct spi_device *spi, u8 *payload, int len);
-
-int read_reg_nosleep(struct spi_device *spi,
-                     u8 reg,
-                     int len,
-                     void (*complete)(void *),
-                     void *context);
-
-int write_reg_nosleep(struct spi_device *spi,
-                      u8 reg,
-                      u8 *val,
-                      int len,
-                      void (*complete)(void *),
-                      void *context);
-
-int read_rx_nosleep(struct spi_device *spi,
-                    void (*complete)(void *),
-                    void *context);
-
 void enable_irqs(struct spi_device *spi);
 void disable_irqs(struct spi_device *spi);
+int read_rx_pld_wid(struct spi_device *spi, u8 *pldwid);
 
 #endif
