@@ -115,7 +115,35 @@ static ssize_t rf_write(struct file *fp,
                         size_t len,
                         loff_t *off)
 {
-        return -ENOSYS;
+        int status;
+        struct rf_data *rf = fp->private_data;
+        char pld[32];
+        int n;
+        size_t minlen = min(len, sizeof(pld));
+
+        if (!rf)
+                return -ENODEV;
+
+        n = copy_from_user(pld, buf, minlen);
+        if (n)
+                return -EIO;
+
+        _DEBUG("len: %d, minlen %d, *off: %lld",
+               len, minlen, *off);
+
+        status = TX(rf, pld, minlen, 1UL);
+        if (status == 0) {
+                _DEBUG("TX timedout");
+                return -ETIMEDOUT;
+        } else if (status < 0) {
+                _DEBUG("TX ERROR: %d", status);
+                return status;
+        }
+        _DEBUG("write transmited");
+
+        *off += minlen;
+
+        return minlen;
 }
 
 static ssize_t rf_read(struct file *fp,
@@ -123,7 +151,32 @@ static ssize_t rf_read(struct file *fp,
                         size_t len,
                         loff_t *off)
 {
-        return -ENOSYS;
+        char pld[32];
+        int n;
+        int rcvd;
+        int status;
+        struct rf_data *rf = fp->private_data;
+
+        if (!rf)
+                return -ENODEV;
+
+        /* returns >0 for success
+         *          0 for timeout
+         *         <0 for error */
+        do {
+                status = RX(rf, pld, rcvd, 100UL);
+        } while (!status);
+
+        if (status < 0) {
+                _DEBUG("RX ERROR: %d", status);
+                return status;
+        }
+        n = copy_to_user(&buf[*off], pld, rcvd);
+        if (n)
+                return -EIO;
+
+        *off += rcvd;
+        return rcvd;
 }
 
 static long rf_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
