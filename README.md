@@ -51,9 +51,9 @@ dtparam=spi=on
 dtoverlay=nrf24
 ```
 
-### Patch this in kernel (tested with branch 3.18.16.y
-                       over commit 1bb18c8
-                            at     http://github.com/raspberrypi/linux )
+### Patch this in kernel 
+
+* Tested with branch 3.18.16.y over commit 1bb18c8 at http://github.com/raspberrypi/linux.
 ```
 From f9f7b0ede79835c5fcfa09ca321f48226caa8cad Mon Sep 17 00:00:00 2001
 From: Daniel Hilst Selli <danielhilst@gmail.com>
@@ -181,6 +181,3 @@ EN_ACK_PAY:    0
 EN_DYN_ACK:    0
 
 ```
- 
-
-
