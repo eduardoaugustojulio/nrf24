@@ -392,7 +392,7 @@ static long rf_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
                         read_reg(rf->spi, FEATURE_REG, rxbuf, 1);
                         rxbuf[0] &= ~BIT(2);
                         write_reg(rf->spi, FEATURE_REG, rxbuf, 1); /* clear EN_DPL bit */
-                        write_reg(rf->spi, DYNPD_REG, "\x01", 1); /* clear DPL_P0 bit */
+                        write_reg(rf->spi, DYNPD_REG, "\x00", 1); /* clear DPL_P0 bit */
                 }
                 break;
 
