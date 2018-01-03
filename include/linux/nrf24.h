@@ -13,6 +13,14 @@ struct nrf_exch {
         unsigned int   tx_siz;
 };
 
+struct nrf_read_multiceiver {
+	unsigned char *rx;
+	unsigned int   rx_siz;
+	unsigned char *rx_addr;
+	unsigned int   rx_addr_len;
+	unsigned int   timeout;
+};
+
 #define NRF24_MAGIC 'r'
 #define NRF24_IOCBASE  0x20
 #define NRF24_IOCSAA     _IOW(NRF24_MAGIC, NRF24_IOCBASE +  0, unsigned char)   /* Autoack, 7 bits, 0 = off, 1 = on */
@@ -34,8 +42,22 @@ struct nrf_exch {
 #define NRF24_IOCSRF     _IOW(NRF24_MAGIC, NRF24_IOCBASE + 16, unsigned char) /* RF_SETUP, 7 bits from RF_SETUP register */
 #define NRF24_IOCGRF     _IOR(NRF24_MAGIC, NRF24_IOCBASE + 17, unsigned char *)
 #define NRF24_IOTTR      _IOWR(NRF24_MAGIC, NRF24_IOCBASE + 18, struct nrf_exch *) /* transmit then receive */
-#define NRF24_IORTT      _IOWR(NRF24_MAGIC, NRF24_IOCBASE + 19, struct nrf_exch *) /* receive then transmit */
+#define NRF24_IOREADMULTICEIVER _IOR(NRF24_MAGIC, NRF24_IOCBASE + 19, struct nrf_read_multiceiver *) /* receive then transmit */
 #define NRF24_IOCSDYNPLD _IOW(NRF24_MAGIC, NRF24_IOCBASE + 20, unsigned char)
 #define NRF24_IOCGDYNPLD _IOW(NRF24_MAGIC, NRF24_IOCBASE + 20, unsigned char *)
+#define NRF24_IOCSRXADDR_P1 _IOW(NRF24_MAGIC, NRF24_IOCBASE + 21, unsigned char *)
+#define NRF24_IOCSRXADDR_P2 _IOW(NRF24_MAGIC, NRF24_IOCBASE + 22, unsigned char)
+#define NRF24_IOCSRXADDR_P3 _IOW(NRF24_MAGIC, NRF24_IOCBASE + 23, unsigned char)
+#define NRF24_IOCSRXADDR_P4 _IOW(NRF24_MAGIC, NRF24_IOCBASE + 24, unsigned char)
+#define NRF24_IOCSRXADDR_P5 _IOW(NRF24_MAGIC, NRF24_IOCBASE + 25, unsigned char)
+#define NRF24_IOCGRXADDR_P1 _IOR(NRF24_MAGIC, NRF24_IOCBASE + 26, unsigned char *)
+#define NRF24_IOCGRXADDR_P2 _IOR(NRF24_MAGIC, NRF24_IOCBASE + 27, unsigned char *)
+#define NRF24_IOCGRXADDR_P3 _IOR(NRF24_MAGIC, NRF24_IOCBASE + 28, unsigned char *)
+#define NRF24_IOCGRXADDR_P4 _IOR(NRF24_MAGIC, NRF24_IOCBASE + 29, unsigned char *)
+#define NRF24_IOCGRXADDR_P5 _IOR(NRF24_MAGIC, NRF24_IOCBASE + 30, unsigned char *)
+#define NRF24_IOCSENRXADDR _IOW(NRF24_MAGIC, NRF24_IOCBASE + 31, unsigned char *)
+#define NRF24_IOCGENRXADDR _IOR(NRF24_MAGIC, NRF24_IOCBASE + 32, unsigned char *)
+#define NRF24_IOCSFEATURE _IOW(NRF24_MAGIC, NRF24_IOCBASE + 33, unsigned char)
+#define NRF24_IOCGFEATURE _IOR(NRF24_MAGIC, NRF24_IOCBASE + 34, unsigned char *)
 
 #endif

@@ -42,7 +42,7 @@ ssize_t show_reg(struct device *dev, struct device_attribute *attr, char *buf)
 
                                 read_reg(spi, SETUP_AW_REG, &aw, 1);
                                 aw +=  2;
-                                read_reg(spi, reg, regval, 5);
+                                read_reg(spi, reg, regval, aw);
                                 switch (aw) {
                                 case 3:
                                         off += scnprintf(buf + off, PAGE_SIZE - off, "%02x:%02x%02x%02x\n", reg, 
@@ -108,23 +108,6 @@ ssize_t store_reg(struct device *dev, struct device_attribute *attr,
 #endif 
 }
 
-ssize_t show_statistics(struct device *dev, struct device_attribute *attr, char *buf)
-{
-        struct spi_device *spi = to_spi_device(dev);
-        struct rf_data *rf     = spi_get_drvdata(spi);
-
-        return snprintf(buf, PAGE_SIZE,
-                        "TX kbps: %5lu\n"
-                        "RX kbps: %5lu\n"
-                        "TX count: %5lu\n"
-                        "RX count: %5lu\n",
-                        rf->tx_kbps,
-                        rf->rx_kbps,
-                        rf->txcount,
-                        rf->rxcount);
-
-}
-
 ssize_t show_config(struct device *dev, struct device_attribute *attr, char *buf)
 {
         u8 regval;
@@ -180,4 +163,98 @@ ssize_t show_config(struct device *dev, struct device_attribute *attr, char *buf
 
 
         return off;
+}
+
+ssize_t show_statistics(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct spi_device *spi = to_spi_device(dev);
+	struct rf_data *rf = spi_get_drvdata(spi);
+	return snprintf(buf, PAGE_SIZE,
+			"Bytes transmitted: %012lu\n"
+			"Bytes received:    %012lu\n"
+			"Timeouts:          %012lu\n",
+			rf->tx_bytes_count,
+			rf->rx_bytes_count,
+			rf->timeout_count);
+
+}
+
+
+static int scanlink_channel_start = 0, scanlink_channel_end = 124, scanlink_channel_reads = 10;
+ssize_t store_scanlink(struct device *dev, struct device_attribute *attr,
+                  const char *buf, size_t count)
+{
+	if (sscanf(buf, "%d-%d/%d", &scanlink_channel_start, &scanlink_channel_end, &scanlink_channel_reads) != 3)
+		dev_err(dev, "%s: Bad format use <start channel>-<end channel>/<number of reads>", attr->attr.name);
+	return count;
+}
+
+ssize_t show_scanlink(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct spi_device *spi = to_spi_device(dev);
+	struct rf_data *rf = spi_get_drvdata(spi);
+	int off = 0, i, hits;
+	/* 14 is the lenght of "<CHANNEL>: [" plus lenght of "] <PERCENTAGE>%" */
+	size_t output_size = (14 + scanlink_channel_reads) * (scanlink_channel_end - scanlink_channel_start);
+	u8 ch, cd;
+	
+	if (rf->inuse)
+		return snprintf(buf, PAGE_SIZE, "Device in use. Use `fuser -k /dev/nrf24-0.0` to kill user before continue\n");
+
+	if (output_size > PAGE_SIZE)
+		return snprintf(buf, PAGE_SIZE, "Too much output (%d bytes), decrease the number of channels or the number of reads\n", output_size);
+
+	pwr_up(rf->spi);
+	for (ch = scanlink_channel_start; ch <= scanlink_channel_end; ch++) {
+		off += snprintf(buf + off, PAGE_SIZE - off, "%03d: [", ch);
+		for (hits = 0, i = 0; i < scanlink_channel_reads; i++) {
+			write_reg(rf->spi, RF_CH_REG, &ch, 1);
+			write_reg(rf->spi, STATUS_REG, "\x70", 1);
+			flush_rx(rf->spi);
+			prx_mode(rf->spi);
+			ce_high(rf->spi);
+			udelay(170);
+			read_reg(rf->spi, CD_REG, &cd, 1);
+			ce_low(rf->spi);
+			if (cd) {
+				off += snprintf(buf + off, PAGE_SIZE - off, "+");
+				hits++;
+			}
+		}
+		off += snprintf(buf + off, PAGE_SIZE - off, "%*s % 3d%%\n", scanlink_channel_reads - hits + 1, "]", hits * 100 / scanlink_channel_reads);
+	}
+
+	return off;
+}
+
+static u8 rftest_channel = 2;
+/* use `echo "channel <N>" > this_sysfsnode` to setup channel. This
+ * can be done at any time. Even when the test is running.
+ *
+ * use `echo "start" > this_sysfsnode` to start test.
+ *
+ * use `echo "stop" > this_sysfsnode` to stop test.  */
+ssize_t store_rftest(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct spi_device *spi = to_spi_device(dev);
+	struct rf_data *rf = spi_get_drvdata(spi);
+
+	if (rf->inuse)
+		return -EBUSY;
+	
+	if (!strncmp(buf, "channel", min(strlen("channel"), count))) {
+		sscanf(buf, "channel %hhu", &rftest_channel);
+		write_reg(rf->spi, RF_CH_REG, &rftest_channel, 1);
+	} else if (!strncmp(buf, "start", min(strlen("start"), count))) {
+		u8 rf_setup = 0b10110110; /* COUNT_WAVE, reserved, RF_DR_LOW, PLL_LOCK | RF_DR_HIGH, RF_PWR, RF_PWR, Obsolete */
+		pwr_up(rf->spi);
+		ptx_mode(rf->spi);
+		write_reg(rf->spi, RF_SETUP_REG, &rf_setup, 1);
+		ce_high(rf->spi);
+	} else if (!strncmp(buf, "stop", min(strlen("stop"), count))) {
+		ce_low(rf->spi);
+		pwr_down(rf->spi);
+	}
+
+	return count;
 }

@@ -18,12 +18,11 @@
 
 #define MODULE_NAME "nrf24"
 #define _DEBUG(fmt, msg...)                                             \
-        do {                                                            \
-                pr_debug("%s:%s@%d: "                                   \
-                         fmt "\n", MODULE_NAME, __func__, __LINE__, ##msg);  \
-        } while (0);
+	trace_printk("%s@%d " fmt "\n", __func__, __LINE__, ##msg)
 
 #define IS_SETTED(bit, mask) (mask & bit)
+#define SET_BIT(mask, bit) ((mask) |= (bit))
+#define CLEAR_BIT(mask, bit) ((mask) &= ~(bit))
 
 /* Commands */
 #define R_REGISTER(addr) (addr)
@@ -78,18 +77,20 @@ struct rf_data {
         struct spi_device *spi;
         struct list_head device_entry;
         struct mutex bus_lock;
-        unsigned int gpio_ce;
+        int gpio_ce;
+	int gpio_led;
 #define DEVNAME_MAX 16
         char devname[DEVNAME_MAX];
         struct completion tx_complete;
         wait_queue_head_t rx_wq;
         int new_rx_data;
         /* statistics */
-        unsigned long txcount;
-        unsigned long rxcount;
-        unsigned long tx_kbps;
-        unsigned long rx_kbps;
-        struct task_struct *statistics_tsk;
+	unsigned long tx_bytes_count;
+	unsigned long rx_bytes_count;
+	unsigned long timeout_count;
+	u8 config;
+	bool goto_prx;
+	bool inuse;
 };
 
-#endif 
+#endif
